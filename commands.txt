@@ -1,0 +1,19 @@
+# Build and run the compiler
+# Option 1: Using make
+make clean
+make
+./compiler test.c
+
+# Option 2: Manual build
+bison -d parser.y
+flex lexer.l
+gcc lex.yy.c parser.tab.c ast.c -o compiler -lfl
+./compiler test.c
+
+# Debug commands
+# Check if lexer is recognizing tokens
+flex --debug lexer.l
+./a.out < test.c
+
+# Check if parser is recognizing grammar
+bison -v parser.y
