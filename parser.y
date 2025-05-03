@@ -69,13 +69,13 @@ program
     : declaration_list
         {
             ast_root = create_node(NODE_PROGRAM);
-            ast_root->as.program.declarations = malloc(sizeof(ASTNode*) * 1000); // Arbitrary limit
+            ast_root->as.program.declarations = malloc(sizeof(ASTNode*) * 1000);
             ast_root->as.program.declaration_count = 0;
             
             // Collect all declarations
             ASTNode* curr = $1;
             while (curr != NULL) {
-                if (curr->type == NODE_BLOCK) {  // Handle multiple declarations from a block
+                if (curr->type == NODE_BLOCK) {
                     for (int i = 0; i < curr->as.block.statement_count; i++) {
                         ast_root->as.program.declarations[ast_root->as.program.declaration_count++] = 
                             curr->as.block.statements[i];
@@ -85,7 +85,7 @@ program
                 } else {
                     ast_root->as.program.declarations[ast_root->as.program.declaration_count++] = curr;
                 }
-                curr = NULL; // For now, we process one level
+                curr = NULL;
             }
             
             $$ = ast_root;
@@ -97,9 +97,13 @@ declaration_list
         { $$ = $1; }
     | declaration_list declaration
         {
-            // In a real implementation, we would need to create a linked list or array
-            // of declarations. For simplicity, just return the latest declaration.
-            $$ = $2;
+            // Create a new block node to hold both declarations
+            ASTNode* block = create_node(NODE_BLOCK);
+            block->as.block.statements = malloc(sizeof(ASTNode*) * 2);
+            block->as.block.statement_count = 2;
+            block->as.block.statements[0] = $1;
+            block->as.block.statements[1] = $2;
+            $$ = block;
         }
     ;
 
@@ -641,7 +645,16 @@ int main(int argc, char* argv[]) {
     // Perform semantic analysis
     if (ast_root != NULL) {
         semantic_analysis(ast_root, global_symbol_table);
+        
+        // Print AST in text format
+        printf("Abstract Syntax Tree (Text Format):\n");
         print_ast(ast_root, 0);
+        
+        // Generate Graphviz visualization
+        printf("\nGenerating AST visualization...\n");
+        print_ast_graphviz(ast_root, "ast.dot");
+        printf("AST visualization saved to ast.dot\n");
+        printf("To view the AST, run: dot -Tpng ast.dot -o ast.png\n");
     }
     
     // Clean up

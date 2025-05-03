@@ -1369,3 +1369,148 @@ void semantic_analysis(ASTNode *node, SymbolTable *table)
         break;
     }
 }
+
+// Add this function at the end of the file, before the last #endif
+void generate_graphviz(ASTNode* node, FILE* out) {
+    if (node == NULL) return;
+
+    // Generate unique node ID
+    fprintf(out, "    node%p [label=\"", (void*)node);
+    
+    // Print node label based on type
+    switch (node->type) {
+        case NODE_PROGRAM:
+            fprintf(out, "Program");
+            break;
+        case NODE_FUNCTION_DECL:
+            fprintf(out, "Function: %s", node->as.function_decl.name);
+            break;
+        case NODE_VAR_DECL:
+            fprintf(out, "Var: %s", node->as.var_decl.name);
+            break;
+        case NODE_BINARY_EXPR:
+            fprintf(out, "Binary: %s", get_op_type_str(node->as.binary_expr.op));
+            break;
+        case NODE_UNARY_EXPR:
+            fprintf(out, "Unary: %s", get_op_type_str(node->as.unary_expr.op));
+            break;
+        case NODE_INT_LITERAL:
+            fprintf(out, "Int: %d", node->as.int_literal.value);
+            break;
+        case NODE_FLOAT_LITERAL:
+            fprintf(out, "Float: %f", node->as.float_literal.value);
+            break;
+        case NODE_BOOL_LITERAL:
+            fprintf(out, "Bool: %s", node->as.bool_literal.value ? "true" : "false");
+            break;
+        case NODE_STRING_LITERAL:
+            fprintf(out, "String: %s", node->as.string_literal.value);
+            break;
+        case NODE_VAR_REF:
+            fprintf(out, "VarRef: %s", node->as.var_ref.name);
+            break;
+        case NODE_FUNC_CALL:
+            fprintf(out, "Call: %s", node->as.func_call.name);
+            break;
+        case NODE_IF_STMT:
+            fprintf(out, "If");
+            break;
+        case NODE_WHILE_STMT:
+            fprintf(out, "While");
+            break;
+        case NODE_FOR_STMT:
+            fprintf(out, "For");
+            break;
+        case NODE_RETURN_STMT:
+            fprintf(out, "Return");
+            break;
+        default:
+            fprintf(out, "%s", get_node_type_str(node->type));
+    }
+    fprintf(out, "\"];\n");
+
+    // Add edges to children
+    switch (node->type) {
+        case NODE_PROGRAM:
+            for (int i = 0; i < node->as.program.declaration_count; i++) {
+                fprintf(out, "    node%p -> node%p;\n", (void*)node, (void*)node->as.program.declarations[i]);
+                generate_graphviz(node->as.program.declarations[i], out);
+            }
+            break;
+        case NODE_FUNCTION_DECL:
+            if (node->as.function_decl.params) {
+                fprintf(out, "    node%p -> node%p [label=\"params\"];\n", (void*)node, (void*)node->as.function_decl.params);
+                generate_graphviz(node->as.function_decl.params, out);
+            }
+            if (node->as.function_decl.body) {
+                fprintf(out, "    node%p -> node%p [label=\"body\"];\n", (void*)node, (void*)node->as.function_decl.body);
+                generate_graphviz(node->as.function_decl.body, out);
+            }
+            break;
+        case NODE_BINARY_EXPR:
+            fprintf(out, "    node%p -> node%p [label=\"left\"];\n", (void*)node, (void*)node->as.binary_expr.left);
+            fprintf(out, "    node%p -> node%p [label=\"right\"];\n", (void*)node, (void*)node->as.binary_expr.right);
+            generate_graphviz(node->as.binary_expr.left, out);
+            generate_graphviz(node->as.binary_expr.right, out);
+            break;
+        case NODE_UNARY_EXPR:
+            fprintf(out, "    node%p -> node%p;\n", (void*)node, (void*)node->as.unary_expr.expr);
+            generate_graphviz(node->as.unary_expr.expr, out);
+            break;
+        case NODE_IF_STMT:
+            fprintf(out, "    node%p -> node%p [label=\"cond\"];\n", (void*)node, (void*)node->as.if_stmt.condition);
+            fprintf(out, "    node%p -> node%p [label=\"then\"];\n", (void*)node, (void*)node->as.if_stmt.then_branch);
+            if (node->as.if_stmt.else_branch) {
+                fprintf(out, "    node%p -> node%p [label=\"else\"];\n", (void*)node, (void*)node->as.if_stmt.else_branch);
+                generate_graphviz(node->as.if_stmt.else_branch, out);
+            }
+            generate_graphviz(node->as.if_stmt.condition, out);
+            generate_graphviz(node->as.if_stmt.then_branch, out);
+            break;
+        case NODE_WHILE_STMT:
+            fprintf(out, "    node%p -> node%p [label=\"cond\"];\n", (void*)node, (void*)node->as.while_stmt.condition);
+            fprintf(out, "    node%p -> node%p [label=\"body\"];\n", (void*)node, (void*)node->as.while_stmt.body);
+            generate_graphviz(node->as.while_stmt.condition, out);
+            generate_graphviz(node->as.while_stmt.body, out);
+            break;
+        case NODE_FOR_STMT:
+            if (node->as.for_stmt.init) {
+                fprintf(out, "    node%p -> node%p [label=\"init\"];\n", (void*)node, (void*)node->as.for_stmt.init);
+                generate_graphviz(node->as.for_stmt.init, out);
+            }
+            if (node->as.for_stmt.condition) {
+                fprintf(out, "    node%p -> node%p [label=\"cond\"];\n", (void*)node, (void*)node->as.for_stmt.condition);
+                generate_graphviz(node->as.for_stmt.condition, out);
+            }
+            if (node->as.for_stmt.update) {
+                fprintf(out, "    node%p -> node%p [label=\"update\"];\n", (void*)node, (void*)node->as.for_stmt.update);
+                generate_graphviz(node->as.for_stmt.update, out);
+            }
+            if (node->as.for_stmt.body) {
+                fprintf(out, "    node%p -> node%p [label=\"body\"];\n", (void*)node, (void*)node->as.for_stmt.body);
+                generate_graphviz(node->as.for_stmt.body, out);
+            }
+            break;
+        case NODE_BLOCK:
+            for (int i = 0; i < node->as.block.statement_count; i++) {
+                fprintf(out, "    node%p -> node%p;\n", (void*)node, (void*)node->as.block.statements[i]);
+                generate_graphviz(node->as.block.statements[i], out);
+            }
+            break;
+        // Add more cases as needed
+    }
+}
+
+void print_ast_graphviz(ASTNode* node, const char* filename) {
+    FILE* out = fopen(filename, "w");
+    if (!out) {
+        fprintf(stderr, "Cannot open file %s for writing\n", filename);
+        return;
+    }
+
+    fprintf(out, "digraph AST {\n");
+    fprintf(out, "    node [shape=box];\n");
+    generate_graphviz(node, out);
+    fprintf(out, "}\n");
+    fclose(out);
+}
