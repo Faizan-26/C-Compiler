@@ -90,15 +90,14 @@ void free_ast(ASTNode *node)
 
     case NODE_SWITCH_STMT:
         free_ast(node->as.switch_stmt.expr);
-        for (int i = 0; i < node->as.switch_stmt.case_count; i++)
-        {
-            free_ast(node->as.switch_stmt.cases[i]);
+        free_ast(node->as.switch_stmt.cases);
+        break;
+
+    case NODE_CASE_LIST:
+        for (int i = 0; i < node->as.case_list.case_count; i++) {
+            free_ast(node->as.case_list.cases[i]);
         }
-        free(node->as.switch_stmt.cases);
-        if (node->as.switch_stmt.default_case)
-        {
-            free_ast(node->as.switch_stmt.default_case);
-        }
+        free(node->as.case_list.cases);
         break;
 
     case NODE_CASE_STMT:
@@ -408,41 +407,25 @@ void print_ast(ASTNode *node, int indent)
         break;
 
     case NODE_SWITCH_STMT:
-        printf("Switch statement\n");
-
-        for (int i = 0; i < indent + 1; i++)
-            printf("  ");
-        printf("Expression:\n");
+        printf("%*sSwitch Expression:\n", indent, "");
         print_ast(node->as.switch_stmt.expr, indent + 2);
+        printf("%*sCases:\n", indent, "");
+        print_ast(node->as.switch_stmt.cases, indent + 2);
+        break;
 
-        for (int i = 0; i < indent + 1; i++)
-            printf("  ");
-        printf("Cases:\n");
-        for (int i = 0; i < node->as.switch_stmt.case_count; i++)
-        {
-            print_ast(node->as.switch_stmt.cases[i], indent + 2);
-        }
-
-        if (node->as.switch_stmt.default_case != NULL)
-        {
-            for (int i = 0; i < indent + 1; i++)
-                printf("  ");
-            printf("Default case:\n");
-            print_ast(node->as.switch_stmt.default_case, indent + 2);
+    case NODE_CASE_LIST:
+        for (int i = 0; i < node->as.case_list.case_count; i++) {
+            print_ast(node->as.case_list.cases[i], indent);
         }
         break;
 
     case NODE_CASE_STMT:
-        if (node->as.case_stmt.value == -1)
-        {
-            printf("Default case\n");
+        if (node->as.case_stmt.value == -1) {
+            printf("%*sDefault Case:\n", indent, "");
+        } else {
+            printf("%*sCase %d:\n", indent, "", node->as.case_stmt.value);
         }
-        else
-        {
-            printf("Case %d\n", node->as.case_stmt.value);
-        }
-
-        print_ast(node->as.case_stmt.body, indent + 1);
+        print_ast(node->as.case_stmt.body, indent + 2);
         break;
 
     case NODE_RETURN_STMT:
@@ -978,121 +961,54 @@ DataType check_types(ASTNode *node, SymbolTable *table)
 
     case NODE_FUNC_CALL:
     {
-        // Look up function
-        Symbol *func = lookup_symbol(table, node->as.func_call.name);
+        // Look up the function in the symbol table
+        Symbol *func = NULL;
+        for (int i = 0; i < table->size; i++) {
+            Symbol *curr = table->symbols[i];
+            while (curr != NULL) {
+                if (curr->is_function && strcmp(curr->name, node->as.func_call.name) == 0) {
+                    func = curr;
+                    break;
+                }
+                curr = curr->next;
+            }
+            if (func != NULL) break;
+        }
 
-        if (func == NULL || !func->is_function)
-        {
+        if (func == NULL) {
             fprintf(stderr, "Line %d: Error: Undefined function '%s'\n",
                     node->line_number, node->as.func_call.name);
             return TYPE_ERROR;
         }
 
         node->as.func_call.symbol = func;
-
-        // Check if this is a built-in function (print/read)
-        if (strcmp(node->as.func_call.name, "print") == 0)
-        {
-            if (node->as.func_call.arg_count != 1)
-            {
-                fprintf(stderr, "Line %d: Error: print() requires exactly one argument\n",
-                        node->line_number);
-                return TYPE_ERROR;
-            }
-
-            // For print function, we need to carefully check the argument
-            // If it's a variable reference, ensure it exists in the current scope
-            if (node->as.func_call.args[0]->type == NODE_VAR_REF)
-            {
-                Symbol *sym = lookup_symbol(table, node->as.func_call.args[0]->as.var_ref.name);
-                if (sym == NULL)
-                {
-                    fprintf(stderr, "Line %d: Error: Undefined variable '%s' in print statement\n",
-                            node->line_number, node->as.func_call.args[0]->as.var_ref.name);
-                    return TYPE_ERROR;
-                }
-                
-                // Check if the variable is in a valid scope
-                if (sym->scope_level > table->scope_level)
-                {
-                    fprintf(stderr, "Line %d: Error: Variable '%s' is out of scope\n",
-                            node->line_number, node->as.func_call.args[0]->as.var_ref.name);
-                    return TYPE_ERROR;
-                }
-            }
-
-            // Check types of the argument
-            DataType arg_type = check_types(node->as.func_call.args[0], table);
-            if (arg_type == TYPE_ERROR)
-            {
-                return TYPE_ERROR;
-            }
-
-            node->as.func_call.result_type = TYPE_VOID;
-            return TYPE_VOID;
-        }
-        else if (strcmp(node->as.func_call.name, "read") == 0)
-        {
-            if (node->as.func_call.arg_count != 1)
-            {
-                fprintf(stderr, "Line %d: Error: read() requires exactly one argument\n",
-                        node->line_number);
-                return TYPE_ERROR;
-            }
-
-            // Argument must be a variable
-            if (node->as.func_call.args[0]->type != NODE_VAR_REF)
-            {
-                fprintf(stderr, "Line %d: Error: Argument to read() must be a variable\n",
-                        node->line_number);
-                return TYPE_ERROR;
-            }
-
-            DataType arg_type = check_types(node->as.func_call.args[0], table);
-            if (arg_type != TYPE_INT && arg_type != TYPE_FLOAT)
-            {
-                fprintf(stderr, "Line %d: Error: read() can only read into numeric variables\n",
-                        node->line_number);
-                return TYPE_ERROR;
-            }
-
-            node->as.func_call.result_type = TYPE_VOID;
-            return TYPE_VOID;
-        }
+        node->as.func_call.result_type = func->return_type;
 
         // Check argument count
-        if (node->as.func_call.arg_count != func->param_count)
-        {
-            fprintf(stderr, "Line %d: Error: Function '%s' expects %d arguments, but got %d\n",
+        if (node->as.func_call.arg_count != func->param_count) {
+            fprintf(stderr, "Line %d: Error: Function '%s' expects %d arguments but got %d\n",
                     node->line_number, node->as.func_call.name,
                     func->param_count, node->as.func_call.arg_count);
             return TYPE_ERROR;
         }
 
         // Check argument types
-        for (int i = 0; i < node->as.func_call.arg_count; i++)
-        {
+        bool has_error = false;
+        for (int i = 0; i < node->as.func_call.arg_count; i++) {
             DataType arg_type = check_types(node->as.func_call.args[i], table);
-
-            if (arg_type == TYPE_ERROR)
-            {
-                return TYPE_ERROR;
-            }
-
-            if (arg_type != func->param_types[i])
-            {
+            if (arg_type != TYPE_ERROR && arg_type != func->param_types[i]) {
                 // Allow implicit int to float conversion
-                if (!(func->param_types[i] == TYPE_FLOAT && arg_type == TYPE_INT))
-                {
-                    fprintf(stderr, "Line %d: Error: Argument %d of function '%s' has wrong type\n",
-                            node->line_number, i + 1, node->as.func_call.name);
-                    return TYPE_ERROR;
+                if (!(func->param_types[i] == TYPE_FLOAT && arg_type == TYPE_INT)) {
+                    fprintf(stderr, "Line %d: Error: Argument %d of function '%s' has type %s but expected %s\n",
+                            node->line_number, i + 1, node->as.func_call.name,
+                            get_data_type_str(arg_type),
+                            get_data_type_str(func->param_types[i]));
+                    has_error = true;
                 }
             }
         }
-
-        node->as.func_call.result_type = func->return_type;
-        return func->return_type;
+        
+        return has_error ? TYPE_ERROR : func->return_type;
     }
 
     case NODE_RETURN_STMT:
@@ -1162,10 +1078,30 @@ DataType check_types(ASTNode *node, SymbolTable *table)
         return TYPE_VOID;
     }
 
+    case NODE_SWITCH_STMT:
+        check_types(node->as.switch_stmt.expr, table);
+        semantic_analysis(node->as.switch_stmt.cases, table);
+        break;
+
+    case NODE_CASE_LIST:
+        // Analyze all cases
+        for (int i = 0; i < node->as.case_list.case_count; i++) {
+            semantic_analysis(node->as.case_list.cases[i], table);
+        }
+        break;
+
+    case NODE_CASE_STMT:
+        // Analyze case body
+        semantic_analysis(node->as.case_stmt.body, table);
+        break;
+
     default:
         // Other node types are not expressions
         return TYPE_ERROR;
     }
+    
+    // Default return to avoid warning
+    return TYPE_ERROR;
 }
 
 // Top-level semantic analysis function
@@ -1385,6 +1321,12 @@ void generate_graphviz(ASTNode* node, FILE* out) {
         case NODE_FUNCTION_DECL:
             fprintf(out, "Function: %s", node->as.function_decl.name);
             break;
+        case NODE_PARAM_LIST:
+            fprintf(out, "ParamList");
+            break;
+        case NODE_PARAM:
+            fprintf(out, "Param: %s", node->as.param.name);
+            break;
         case NODE_VAR_DECL:
             fprintf(out, "Var: %s", node->as.var_decl.name);
             break;
@@ -1393,6 +1335,15 @@ void generate_graphviz(ASTNode* node, FILE* out) {
             break;
         case NODE_UNARY_EXPR:
             fprintf(out, "Unary: %s", get_op_type_str(node->as.unary_expr.op));
+            break;
+        case NODE_ASSIGN_EXPR:
+            fprintf(out, "Assign");
+            break;
+        case NODE_FUNC_CALL:
+            fprintf(out, "Call: %s", node->as.func_call.name);
+            break;
+        case NODE_VAR_REF:
+            fprintf(out, "VarRef: %s", node->as.var_ref.name);
             break;
         case NODE_INT_LITERAL:
             fprintf(out, "Int: %d", node->as.int_literal.value);
@@ -1406,12 +1357,6 @@ void generate_graphviz(ASTNode* node, FILE* out) {
         case NODE_STRING_LITERAL:
             fprintf(out, "String: %s", node->as.string_literal.value);
             break;
-        case NODE_VAR_REF:
-            fprintf(out, "VarRef: %s", node->as.var_ref.name);
-            break;
-        case NODE_FUNC_CALL:
-            fprintf(out, "Call: %s", node->as.func_call.name);
-            break;
         case NODE_IF_STMT:
             fprintf(out, "If");
             break;
@@ -1421,8 +1366,29 @@ void generate_graphviz(ASTNode* node, FILE* out) {
         case NODE_FOR_STMT:
             fprintf(out, "For");
             break;
+        case NODE_SWITCH_STMT:
+            fprintf(out, "Switch");
+            break;
+        case NODE_CASE_STMT:
+            if (node->as.case_stmt.value == -1) {
+                fprintf(out, "  node%p [label=\"Default Case\"];\n", node);
+            } else {
+                fprintf(out, "  node%p [label=\"Case %d\"];\n", node, node->as.case_stmt.value);
+            }
+            
+            if (node->as.case_stmt.body) {
+                fprintf(out, "  node%p -> node%p [label=\"body\"];\n", node, node->as.case_stmt.body);
+                generate_graphviz(node->as.case_stmt.body, out);
+            }
+            break;
         case NODE_RETURN_STMT:
             fprintf(out, "Return");
+            break;
+        case NODE_EXPR_STMT:
+            fprintf(out, "ExprStmt");
+            break;
+        case NODE_BLOCK:
+            fprintf(out, "Block");
             break;
         default:
             fprintf(out, "%s", get_node_type_str(node->type));
@@ -1447,6 +1413,21 @@ void generate_graphviz(ASTNode* node, FILE* out) {
                 generate_graphviz(node->as.function_decl.body, out);
             }
             break;
+        case NODE_PARAM_LIST:
+            for (int i = 0; i < node->as.param_list.param_count; i++) {
+                fprintf(out, "    node%p -> node%p;\n", (void*)node, (void*)node->as.param_list.params[i]);
+                generate_graphviz(node->as.param_list.params[i], out);
+            }
+            break;
+        case NODE_PARAM:
+            // Parameters don't have children
+            break;
+        case NODE_VAR_DECL:
+            if (node->as.var_decl.init_expr) {
+                fprintf(out, "    node%p -> node%p [label=\"init\"];\n", (void*)node, (void*)node->as.var_decl.init_expr);
+                generate_graphviz(node->as.var_decl.init_expr, out);
+            }
+            break;
         case NODE_BINARY_EXPR:
             fprintf(out, "    node%p -> node%p [label=\"left\"];\n", (void*)node, (void*)node->as.binary_expr.left);
             fprintf(out, "    node%p -> node%p [label=\"right\"];\n", (void*)node, (void*)node->as.binary_expr.right);
@@ -1456,6 +1437,27 @@ void generate_graphviz(ASTNode* node, FILE* out) {
         case NODE_UNARY_EXPR:
             fprintf(out, "    node%p -> node%p;\n", (void*)node, (void*)node->as.unary_expr.expr);
             generate_graphviz(node->as.unary_expr.expr, out);
+            break;
+        case NODE_ASSIGN_EXPR:
+            fprintf(out, "    node%p -> node%p [label=\"left\"];\n", (void*)node, (void*)node->as.assign_expr.left);
+            fprintf(out, "    node%p -> node%p [label=\"right\"];\n", (void*)node, (void*)node->as.assign_expr.right);
+            generate_graphviz(node->as.assign_expr.left, out);
+            generate_graphviz(node->as.assign_expr.right, out);
+            break;
+        case NODE_FUNC_CALL:
+            for (int i = 0; i < node->as.func_call.arg_count; i++) {
+                fprintf(out, "    node%p -> node%p [label=\"arg%d\"];\n", (void*)node, (void*)node->as.func_call.args[i], i);
+                generate_graphviz(node->as.func_call.args[i], out);
+            }
+            break;
+        case NODE_VAR_REF:
+            // Variable references don't have children
+            break;
+        case NODE_INT_LITERAL:
+        case NODE_FLOAT_LITERAL:
+        case NODE_BOOL_LITERAL:
+        case NODE_STRING_LITERAL:
+            // Literals don't have children
             break;
         case NODE_IF_STMT:
             fprintf(out, "    node%p -> node%p [label=\"cond\"];\n", (void*)node, (void*)node->as.if_stmt.condition);
@@ -1491,13 +1493,47 @@ void generate_graphviz(ASTNode* node, FILE* out) {
                 generate_graphviz(node->as.for_stmt.body, out);
             }
             break;
+        case NODE_SWITCH_STMT: {
+            fprintf(out, "  node%p [label=\"Switch Statement\"];\n", node);
+            fprintf(out, "  node%p -> node%p [label=\"expression\"];\n", node, node->as.switch_stmt.expr);
+            generate_graphviz(node->as.switch_stmt.expr, out);
+            
+            fprintf(out, "  node%p -> node%p [label=\"cases\"];\n", node, node->as.switch_stmt.cases);
+            generate_graphviz(node->as.switch_stmt.cases, out);
+            break;
+        }
+        case NODE_CASE_LIST: {
+            fprintf(out, "  node%p [label=\"Case List\"];\n", node);
+            for (int i = 0; i < node->as.case_list.case_count; i++) {
+                fprintf(out, "  node%p -> node%p [label=\"case %d\"];\n", node, node->as.case_list.cases[i], i);
+                generate_graphviz(node->as.case_list.cases[i], out);
+            }
+            break;
+        }
+        case NODE_CASE_STMT:
+            if (node->as.case_stmt.body) {
+                fprintf(out, "    node%p -> node%p [label=\"body\"];\n", (void*)node, (void*)node->as.case_stmt.body);
+                generate_graphviz(node->as.case_stmt.body, out);
+            }
+            break;
+        case NODE_RETURN_STMT:
+            if (node->as.return_stmt.expr) {
+                fprintf(out, "    node%p -> node%p;\n", (void*)node, (void*)node->as.return_stmt.expr);
+                generate_graphviz(node->as.return_stmt.expr, out);
+            }
+            break;
+        case NODE_EXPR_STMT:
+            if (node->as.expr_stmt.expr) {
+                fprintf(out, "    node%p -> node%p;\n", (void*)node, (void*)node->as.expr_stmt.expr);
+                generate_graphviz(node->as.expr_stmt.expr, out);
+            }
+            break;
         case NODE_BLOCK:
             for (int i = 0; i < node->as.block.statement_count; i++) {
                 fprintf(out, "    node%p -> node%p;\n", (void*)node, (void*)node->as.block.statements[i]);
                 generate_graphviz(node->as.block.statements[i], out);
             }
             break;
-        // Add more cases as needed
     }
 }
 

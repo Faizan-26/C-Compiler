@@ -31,6 +31,7 @@ typedef enum
     NODE_WHILE_STMT,
     NODE_FOR_STMT,
     NODE_SWITCH_STMT,
+    NODE_CASE_LIST,
     NODE_CASE_STMT,
     NODE_RETURN_STMT,
     NODE_EXPR_STMT,
@@ -85,6 +86,7 @@ typedef struct ASTNode
 {
     NodeType type;
     struct ASTNode *parent;
+    struct ASTNode *next; // For linked list of arguments
 
     union
     {
@@ -148,10 +150,15 @@ typedef struct ASTNode
         struct
         {
             struct ASTNode *expr;
+            struct ASTNode *cases;
+            int case_count;
+        } switch_stmt;
+
+        struct
+        {
             struct ASTNode **cases;
             int case_count;
-            struct ASTNode *default_case;
-        } switch_stmt;
+        } case_list;
 
         struct
         {
@@ -278,6 +285,7 @@ extern void yyerror(const char *s);
 ASTNode *create_node(NodeType type);
 void free_ast(ASTNode *node);
 void print_ast(ASTNode *node, int indent);
+void print_ast_graphviz(ASTNode* node, const char* filename);
 
 // Symbol table functions
 SymbolTable *create_symbol_table(int size);

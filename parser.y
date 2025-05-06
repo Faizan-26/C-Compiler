@@ -46,7 +46,7 @@ void yyerror(const char* s);
 %type <node_val> compound_stmt stmt_list statement
 %type <node_val> expr_stmt selection_stmt iteration_stmt switch_stmt
 %type <node_val> return_stmt break_stmt continue_stmt io_stmt
-%type <node_val> case_list case_stmt default_stmt
+%type <node_val> case_list case_stmt
 %type <node_val> expression var assignment_expr
 %type <node_val> simple_expr additive_expr term factor call
 %type <node_val> args arg_list
@@ -60,6 +60,8 @@ void yyerror(const char* s);
 %left '+' '-'
 %left '*' '/' '%'
 %right '!' UMINUS
+%nonassoc THEN
+%nonassoc ELSE
 
 %start program
 
@@ -199,12 +201,11 @@ compound_stmt
     ;
 
 stmt_list
-    : statement
+    : /* empty */
         { 
             $$ = create_node(NODE_BLOCK);
-            $$->as.block.statements = malloc(sizeof(ASTNode*));
-            $$->as.block.statements[0] = $1;
-            $$->as.block.statement_count = 1;
+            $$->as.block.statements = NULL;
+            $$->as.block.statement_count = 0;
         }
     | stmt_list statement
         { 
@@ -212,12 +213,6 @@ stmt_list
             $$->as.block.statements = realloc($$->as.block.statements, 
                 sizeof(ASTNode*) * ($$->as.block.statement_count + 1));
             $$->as.block.statements[$$->as.block.statement_count++] = $2;
-        }
-    | /* empty */
-        { 
-            $$ = create_node(NODE_BLOCK);
-            $$->as.block.statements = NULL;
-            $$->as.block.statement_count = 0;
         }
     ;
 
@@ -256,7 +251,7 @@ expr_stmt
     ;
 
 selection_stmt
-    : IF '(' expression ')' statement
+    : IF '(' expression ')' statement %prec THEN
         {
             $$ = create_node(NODE_IF_STMT);
             $$->as.if_stmt.condition = $3;
@@ -307,20 +302,24 @@ switch_stmt
         {
             $$ = create_node(NODE_SWITCH_STMT);
             $$->as.switch_stmt.expr = $3;
-            // In a real implementation, we would need to handle the case list
+            $$->as.switch_stmt.cases = $6;
             $$->line_number = yylineno;
         }
     ;
 
 case_list
     : case_stmt
-        { $$ = $1; }
+        { 
+            $$ = create_node(NODE_CASE_LIST);
+            $$->as.case_list.cases = malloc(sizeof(ASTNode*) * 100); // Arbitrary limit
+            $$->as.case_list.case_count = 1;
+            $$->as.case_list.cases[0] = $1;
+        }
     | case_list case_stmt
-        { $$ = $2; } // Simple case: just return the last case
-    | default_stmt
-        { $$ = $1; }
-    | case_list default_stmt
-        { $$ = $2; }
+        { 
+            $$ = $1;
+            $$->as.case_list.cases[$$->as.case_list.case_count++] = $2;
+        }
     ;
 
 case_stmt
@@ -331,10 +330,7 @@ case_stmt
             $$->as.case_stmt.body = $4;
             $$->line_number = yylineno;
         }
-    ;
-
-default_stmt
-    : DEFAULT ':' stmt_list
+    | DEFAULT ':' stmt_list
         {
             $$ = create_node(NODE_CASE_STMT);
             $$->as.case_stmt.value = -1; // Special value for default
@@ -596,7 +592,18 @@ call
         {
             $$ = create_node(NODE_FUNC_CALL);
             $$->as.func_call.name = $1;
-            // In a real implementation, we would need to handle args
+            if ($3 != NULL) {
+                $$->as.func_call.args = malloc(sizeof(ASTNode*) * 100); // Arbitrary limit
+                $$->as.func_call.arg_count = 0;
+                ASTNode* curr = $3;
+                while (curr != NULL) {
+                    $$->as.func_call.args[$$->as.func_call.arg_count++] = curr;
+                    curr = curr->next;
+                }
+            } else {
+                $$->as.func_call.args = NULL;
+                $$->as.func_call.arg_count = 0;
+            }
             $$->line_number = yylineno;
         }
     ;
@@ -610,11 +617,18 @@ args
 
 arg_list
     : expression
-        { $$ = $1; }
+        { 
+            $$ = $1;
+            $$->next = NULL;
+        }
     | arg_list ',' expression
         {
-            // In a real implementation, we would need to create a linked list
-            // or array of arguments. For simplicity, just return the first argument.
+            ASTNode* curr = $1;
+            while (curr->next != NULL) {
+                curr = curr->next;
+            }
+            curr->next = $3;
+            $3->next = NULL;
             $$ = $1;
         }
     ;

@@ -81,7 +81,8 @@ extern int yydebug;
     GE = 282,                      /* GE  */
     AND = 283,                     /* AND  */
     OR = 284,                      /* OR  */
-    UMINUS = 285                   /* UMINUS  */
+    UMINUS = 285,                  /* UMINUS  */
+    THEN = 286                     /* THEN  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -99,7 +100,7 @@ union YYSTYPE
     DataType type_val;
     ASTNode* node_val;
 
-#line 103 "parser.tab.h"
+#line 104 "parser.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -1,3 +1,9 @@
+
+// Function definition
+int add(int a, int b)
+{
+    return a + b;
+}
 // Test program for compiler frontend
 int main()
 {
@@ -40,10 +46,4 @@ int main()
     print(result);
     
     return 0;
-}
-
-// Function definition
-int add(int a, int b)
-{
-    return a + b;
 }
