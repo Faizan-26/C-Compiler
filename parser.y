@@ -640,14 +640,29 @@ void yyerror(const char* s) {
 }
 
 int main(int argc, char* argv[]) {
+    // Parse command line options
+    bool emit_ir = false;
+    bool optimize = false;
+    char* input_file = NULL;
+    
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--emit-ir") == 0) {
+            emit_ir = true;
+        } else if (strcmp(argv[i], "--optimize") == 0) {
+            optimize = true;
+        } else {
+            input_file = argv[i];
+        }
+    }
+    
     // Initialize global symbols table
     global_symbol_table = create_symbol_table(100);
     
     // Parse from file if specified, otherwise from stdin
-    if (argc > 1) {
-        FILE* file = fopen(argv[1], "r");
+    if (input_file) {
+        FILE* file = fopen(input_file, "r");
         if (!file) {
-            fprintf(stderr, "Cannot open file %s\n", argv[1]);
+            fprintf(stderr, "Cannot open file %s\n", input_file);
             return 1;
         }
         yyin = file;
@@ -669,6 +684,49 @@ int main(int argc, char* argv[]) {
         print_ast_graphviz(ast_root, "ast.dot");
         printf("AST visualization saved to ast.dot\n");
         printf("To view the AST, run: dot -Tpng ast.dot -o ast.png\n");
+        
+        // Generate LLVM IR if requested
+        if (emit_ir) {
+            printf("\nGenerating LLVM IR...\n");
+            
+            // Get base filename without extension
+            char* base_name = strdup(input_file);
+            char* dot = strrchr(base_name, '.');
+            if (dot) *dot = '\0';
+            
+            // Generate unoptimized IR
+            LLVMModuleRef module = generate_ir(ast_root, base_name);
+            
+            if (module) {
+                // Save unoptimized IR
+                char unopt_filename[256];
+                sprintf(unopt_filename, "%s.ll", base_name);
+                dump_ir(module, unopt_filename);
+                printf("Unoptimized IR saved to %s\n", unopt_filename);
+                
+                // Apply optimizations if requested
+                if (optimize) {
+                    printf("\nApplying optimizations...\n");
+                    
+                    // Apply optimizations
+                    apply_optimizations(module, OPT_AGGRESSIVE);
+                    
+                    // Save optimized IR
+                    char opt_filename[256];
+                    sprintf(opt_filename, "%s.opt.ll", base_name);
+                    dump_ir(module, opt_filename);
+                    printf("Optimized IR saved to %s\n", opt_filename);
+                    
+                    // Generate optimization report
+                    generate_optimization_report(unopt_filename, opt_filename, "optimization_report.txt");
+                }
+                
+                // Clean up LLVM module
+                LLVMDisposeModule(module);
+            }
+            
+            free(base_name);
+        }
     }
     
     // Clean up

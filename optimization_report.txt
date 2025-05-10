@@ -1,0 +1,14 @@
+Optimization Report
+==================
+
+Size comparison:
+  Unoptimized IR: 540 bytes
+  Optimized IR:   426 bytes
+  Reduction:      21.11%
+
+Optimizations Applied:
+  - Constant folding: 1 constant expressions folded
+  - Dead code elimination: 3 store operations eliminated
+  - Strength reduction
+  - Common subexpression elimination: 9 instructions eliminated
+  - Loop-invariant code motion

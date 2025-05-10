@@ -1,53 +1,28 @@
-Introduction
-This project aims to provide students with hands-on experience in building a compiler from
-scratch. Through this project, students will learn how to implement different stages of
-compilation, from lexical analysis to code generation. By the end of this project, students will
-have a solid understanding of compiler design principles and optimization techniques used in
-modern compilers.
-Goal
-The goal of this project is to develop a fully functional compiler that can process a custom
-programming language and generate executable code. The project is divided into three
-deliverables, each focusing on a specific phase of compilation:
-1. Frontend - responsible for lexical, syntax, and semantic analysis.
-2. Middle-End - responsible for intermediate representation (IR) and optimizations.
-3. Backend - responsible for code generation and linking.
-By completing this project, students will gain practical experience in compiler construction,
-programming language design, and performance optimization techniques.
-Deliverable 1: Frontend
+Deliverable 2: Middle-End
 Objective
-The objective of this deliverable is to build the initial stages of the compiler, which include
-lexical analysis, syntax analysis, and semantic analysis. These stages ensure that the source code
-conforms to the defined language rules and is free of syntactical and semantic errors before
-further processing.
-Language Specification
-Define a simple language with:
- Basic data types (int, float, bool), variables, arithmetic/logical operations.
- Control flow constructs (if-else statements, while loops, for loops, switch-case
-statements).
- Functions with parameters and return types, including recursion.
- Basic I/O operations (print, read).
- Operators: arithmetic (+, -, *, /, %), logical (&&, ||, !), relational (==, !=, <, >, <=, >=).
- User-defined functions and variable scope management.
-
+The objective of this deliverable is to transform the Abstract Syntax Tree (AST) into an
+intermediate representation (IR) and apply optimizations to improve execution efficiency. This
+phase ensures that redundant operations are eliminated, and the generated code is as efficient as
+possible.
 Tasks
-Lexical Analysis
- Use Flex (or hand-written code) to tokenize input (e.g., identifiers, keywords, operators).
- Handle whitespace, comments (single-line and multi-line), and syntax errors.
- Identify and report lexical errors (e.g., invalid tokens).
- Output: List of tokens with line numbers.
-Syntax Analysis
- Use Bison (or recursive descent parser) to validate syntax against a well-defined
-grammar.
- Define grammar rules for statements, expressions, loops, conditionals, and function
-declarations.
- Generate meaningful syntax error messages.
- Output: Abstract Syntax Tree (AST) in a textual/graphical format.
-Semantic Analysis
- Build a symbol table to track variables/functions (scope, type, memory location).
- Perform type checking (e.g., int + float → error) and function signature validation.
- Check for undeclared variables, multiple declarations, and function misuse.
- Validate function calls (arity, return types) and ensure proper scoping.
- Output: Semantic error reports with detailed explanations.
+Intermediate Representation (IR)
+ Convert AST to three-address code or LLVM IR.
+ Handle temporary variables for intermediate calculations.
+Example:
+x = a + b * 3;
+→ t1 = b * 3
+→ t2 = a + t1
+→ x = t2
+Optimizations
+ Implement constant folding (e.g., 3 + 5 → 8).
+ Dead code elimination (remove unused variables/statements).
+ Strength reduction (optimize costly operations, e.g., replacing x * 2 with x << 1).
+ Loop-invariant code motion (optional stretch goal).
+ Common subexpression elimination to reduce redundant calculations.
 Tools
- Lex/Flex or Yacc/Bison or hand-written scanners/parsers.
- Graphviz (for AST visualization).
+ LLVM
+Submission
+ Code for IR generation and optimizations.
+ Test programs showing IR before/after optimization.
+ Test cases (valid/invalid programs) with outputs.
+ Report comparing optimized vs. unoptimized IR.

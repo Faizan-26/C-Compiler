@@ -6,6 +6,9 @@
 #include <string.h>
 #include <stdbool.h>
 
+// Forward declarations for LLVM 
+typedef struct LLVMOpaqueModule* LLVMModuleRef;
+
 // Data type enum
 typedef enum
 {
@@ -273,21 +276,22 @@ typedef struct SymbolTable
     int scope_level;  // Current scope level
 } SymbolTable;
 
-// External declarations
-extern FILE *yyin;
+// External variables from parser
+extern FILE* yyin;
 extern int yylineno;
-extern char *yytext;
 extern int yylex();
 extern int yyparse();
 extern void yyerror(const char *s);
+extern ASTNode* ast_root;
+extern SymbolTable* global_symbol_table;
 
-// AST functions
+// AST creation and management
 ASTNode *create_node(NodeType type);
 void free_ast(ASTNode *node);
 void print_ast(ASTNode *node, int indent);
 void print_ast_graphviz(ASTNode* node, const char* filename);
 
-// Symbol table functions
+// Symbol table management
 SymbolTable *create_symbol_table(int size);
 void free_symbol_table(SymbolTable *table);
 Symbol *lookup_symbol(SymbolTable *table, const char *name);
@@ -299,8 +303,8 @@ void exit_scope(SymbolTable *table);
 DataType check_types(ASTNode *node, SymbolTable *table);
 void semantic_analysis(ASTNode *node, SymbolTable *table);
 
-// Global variables
-extern ASTNode *ast_root;
-extern SymbolTable *global_symbol_table;
+// Include headers for middle-end
+#include "ir_generator.h"
+#include "optimization.h"
 
-#endif /* COMPILER_H */
+#endif // COMPILER_H
