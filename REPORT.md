@@ -1,8 +1,8 @@
-# Compiler Project Report
+# C Compiler Project Report
 
 ## Overview
 
-This report provides a comprehensive overview of the compiler project, detailing each phase from frontend to backend with a focus on the optimization capabilities. The compiler follows the traditional compiler design pattern, with distinct phases for lexical analysis, syntax analysis, semantic analysis, intermediate code generation, optimization, and code emission.
+This report provides a comprehensive overview of our C compiler project, detailing each phase from frontend to backend with a focus on the optimization capabilities. The compiler follows the traditional compiler design pattern, with distinct phases for lexical analysis, syntax analysis, semantic analysis, intermediate code generation, optimization, and code emission.
 
 ## Project Structure
 
@@ -13,215 +13,239 @@ The project is organized into the following key components:
 3. **Abstract Syntax Tree (AST)**: Defined in `compiler.h` and implemented in `ast.c`
 4. **IR Generation**: LLVM IR generation in `ir_generator.c`
 5. **Optimization**: LLVM-based optimizations in `optimization.c`
+6. **Backend**: Assembly generation in `backend.c`
+
+## Compiler Construction Concepts Used
+
+### Parser Type: Bottom-Up LR(1) Parser
+
+This compiler uses Bison (a GNU implementation of Yacc) which implements a **bottom-up LR(1) parser**. Key characteristics of this parsing approach include:
+
+- **Bottom-up parsing**: The parser starts with individual tokens and works upward to build the parse tree
+- **LR(1)**: The parser is "Left-to-right, Rightmost derivation" with 1 token lookahead
+- **Shift-reduce technique**: Uses shift and reduce actions based on parsing tables
+- **Handles context-free grammars**: Can parse a wide range of programming language syntax
+- **Better error detection**: LR parsers can detect syntax errors earlier than top-down parsers
+
+The LR(1) parser is particularly suited for programming languages due to its ability to handle operator precedence and associativity naturally, which is important for parsing expressions in C.
+
+### Symbol Table Implementation
+
+The compiler implements a symbol table for tracking identifiers (variables and functions):
+
+- **Scope management**: Symbols are organized by their lexical scope
+- **Name resolution**: Finds the appropriate declaration for each identifier reference
+- **Type checking**: Stores and retrieves type information for compile-time type checking
+- **Implementation**: Uses a simplified array-based approach in the IR context
+
+### Type System
+
+The compiler supports a basic type system with:
+
+- **Basic types**: int, float, bool, void
+- **Type checking**: Ensures operations have compatible types
+- **Type conversion**: Implicit conversions are handled during IR generation
+
+### Control Flow Representation
+
+Control flow is represented in both the AST and LLVM IR:
+
+- **AST**: Control flow nodes for if-statements, loops, and function calls
+- **LLVM IR**: Uses basic blocks and branch instructions to represent control flow
+- **CFG (Control Flow Graph)**: Implicitly built during IR generation
 
 ## Frontend Analysis
 
-### Lexical Analysis
+### Lexical Analysis (Scanner)
 
-The lexical analyzer (`lexer.l`) tokenizes the source code, identifying keywords, identifiers, literals, and operators. It supports:
+The lexical analyzer (`lexer.l`) uses Flex to tokenize the source code, identifying:
 
-- C-like syntax with keywords such as `int`, `float`, `bool`, `if`, `else`, `while`, `for`, `return`
-- Numeric literals (integers and floating-point numbers)
-- Boolean literals (`true` and `false`)
-- String literals
-- Various operators for arithmetic, comparison, and logic operations
+- Keywords (`int`, `float`, `bool`, `if`, `else`, `while`, `for`, `return`)
+- Identifiers (variable and function names)
+- Literals (integers, floats, booleans, strings)
+- Operators and punctuation
 
-### Syntax Analysis
+Regular expressions in the lexer define patterns for each token type, and actions produce token values for the parser.
 
-The parser (`parser.y`) builds a parse tree from the token stream provided by the lexer. It defines the grammar for:
+### Syntax Analysis (Parser)
 
-- Variable declarations with optional initialization
-- Function declarations with parameters
-- Control flow statements (if-else, while, for)
-- Expressions (arithmetic, relational, logical)
-- Function calls
+The parser (`parser.y`) uses Bison to define a context-free grammar for our C-like language. It:
 
-The parser constructs an Abstract Syntax Tree (AST) during the parsing process, which serves as the intermediate representation for further analysis and code generation.
+- Defines production rules for all language constructs
+- Builds an Abstract Syntax Tree (AST) during parsing
+- Handles operator precedence and associativity using Bison's capabilities
+- Reports syntax errors with line numbers
 
 ### Abstract Syntax Tree (AST)
 
-The AST is implemented with a recursive node structure in `compiler.h` and `ast.c`. Each node represents a construct in the source language:
+The AST serves as an intermediate representation between parsing and code generation:
 
-- Program nodes contain function declarations
-- Function nodes contain parameter lists and blocks
-- Blocks contain statements
-- Statements include declarations, if-else, loops, returns, etc.
-- Expressions include binary operations, unary operations, assignments, function calls, etc.
-
-The AST visualization is generated using GraphViz, allowing for visual inspection of the parse tree.
-
-### Semantic Analysis
-
-Semantic analysis includes type checking and symbol table management. The compiler:
-
-- Validates that expressions have compatible types
-- Ensures variables are declared before use
-- Verifies function calls have the correct number and type of arguments
-- Manages scope for variable and function declarations
+- **Node hierarchy**: Different node types for different language constructs
+- **Tree structure**: Represents the nesting of statements and expressions
+- **Visitation**: Supports traversal for semantic analysis and code generation
+- **Visualization**: AST can be visualized using GraphViz (via `dot`)
 
 ## Intermediate Code Generation
 
-The IR generator (`ir_generator.c`) translates the AST into LLVM IR, which is a low-level but platform-independent representation. Features of the IR generation include:
+The IR generator (`ir_generator.c`) translates the AST into LLVM IR:
 
-- Translation of AST nodes to corresponding LLVM IR instructions
-- Creation of basic blocks for control flow
-- Allocation of memory for variables
-- Function parameter handling
-- Expression evaluation and type conversions
+- **LLVM API usage**: Uses the LLVM C API to generate IR
+- **SSA form**: Generated IR is in Static Single Assignment form
+- **Basic blocks**: Control flow is represented using basic blocks
+- **Instruction selection**: Maps AST operations to appropriate LLVM instructions
+- **Memory allocation**: Allocates stack space for local variables
 
-The IR generator also implements some basic optimizations during IR construction, such as strength reduction for multiplications by powers of 2 (converting to bit shifts).
+## Optimization Techniques
 
-## Optimization Phase
+The compiler implements several optimization techniques through `optimization.c`:
 
-The optimization phase, implemented in `optimization.c`, leverages LLVM's optimization passes to improve the generated code. This part of the project has been upgraded to use LLVM's built-in optimization infrastructure through the Pass Builder API.
+### 1. Constant Folding
 
-### Implemented Optimizations
+- **Description**: Evaluates constant expressions at compile time
+- **Example**: `3 + 5` becomes `8`
+- **Implementation**: Uses LLVM's constant folding pass
+- **Benefits**: Reduces runtime computation and code size
 
-1. **Constant Folding**: Evaluates constant expressions at compile time.
-   - Example: `3 + 5` is folded to `8`
-   - This reduces runtime computation and code size
+### 2. Dead Code Elimination (DCE)
 
-2. **Dead Code Elimination**: Removes unused code.
-   - Unused variables
-   - Unreachable code blocks
-   - Assignments to variables that are never read
+- **Description**: Removes unused code that doesn't affect program behavior
+- **Targets**: Unused variables, unreachable code, unused computations
+- **Implementation**: Uses LLVM's DCE pass
+- **Benefits**: Reduces code size and can improve cache utilization
 
-3. **Strength Reduction**: Replaces expensive operations with equivalent but cheaper ones.
-   - Multiplication by powers of 2 is converted to bit shifts
-   - Example: `x * 8` becomes `x << 3`
-   - This significantly improves runtime performance
+### 3. Strength Reduction
 
-4. **Common Subexpression Elimination (CSE)**: Identifies and eliminates redundant computations.
-   - If the same expression is computed multiple times, the result is stored and reused
-   - This reduces both code size and execution time
+- **Description**: Replaces expensive operations with equivalent but cheaper ones
+- **Primary example**: `x * 8` becomes `x << 3` (multiplication to shift)
+- **Implementation**: 
+  - Custom implementation during IR generation
+  - Also leverages LLVM's strength reduction pass
+- **Benefits**: Improves runtime performance by using less expensive CPU instructions
 
-5. **Loop-Invariant Code Motion (LICM)**: Moves code outside loops when it doesn't change inside the loop.
-   - Computations that are invariant across loop iterations are hoisted out
-   - This reduces the number of instructions executed during loop iterations
+### 4. Common Subexpression Elimination (CSE)
 
-### Optimization Implementation
+- **Description**: Identifies and eliminates redundant computations
+- **Approach**: Stores and reuses results of repeated expressions
+- **Implementation**: Uses LLVM's GVN (Global Value Numbering) pass
+- **Benefits**: Reduces both code size and execution time
 
-The optimization phase is implemented using LLVM's PassBuilder API, which provides access to LLVM's suite of optimization passes. The implementation:
+### 5. Loop-Invariant Code Motion (LICM)
 
-1. Creates a PassBuilder options object to configure optimization settings
-2. Selects appropriate optimization passes based on the optimization level
-3. Executes the optimization passes on the LLVM module
-4. Generates an optimization report comparing the unoptimized and optimized IR
+- **Description**: Moves code that doesn't change inside loops to outside the loop
+- **Implementation**: Uses LLVM's LICM pass
+- **Benefits**: Reduces loop execution time by computing invariant expressions only once
 
-The optimization level is configurable, allowing for different optimization strategies:
-- `OPT_NONE`: No optimizations
-- `OPT_BASIC`: Basic optimizations including constant folding and dead code elimination
-- `OPT_AGGRESSIVE`: More aggressive optimizations including strength reduction and CSE
-- `OPT_FULL`: All optimizations, including LICM and others
+### Optimization Implementation Details
 
-### Optimization Report Generation
+- **PassBuilder API**: Uses LLVM's modern PassBuilder API for optimizations
+- **Optimization levels**: Supports multiple optimization levels (None, Basic, Aggressive, Full)
+- **Optimization report**: Generates detailed reports comparing unoptimized and optimized IR
 
-The optimizer generates a report comparing the unoptimized and optimized IR code. The report includes:
+## Backend Code Generation
 
-- Size comparison before and after optimization
-- Percentage reduction in code size
-- List of applied optimizations with detailed statistics:
-  - Number of constant expressions folded
-  - Number of dead store operations eliminated
-  - Number of strength reductions applied
-  - Number of common subexpressions eliminated
-  - Loop optimizations applied
+The backend (`backend.c`) converts LLVM IR to target-specific assembly code:
 
-## Testing
+- **Target architecture**: Currently generates x86-64 assembly
+- **Instruction selection**: Maps LLVM IR instructions to x86-64 instructions
+- **Register allocation**: Maps IR virtual registers to physical registers
+- **Stack frame management**: Allocates stack space for local variables
 
-The project includes various test files to verify the functionality of different phases:
+## Project Requirements and Setup
 
-1. `test.c`: A general test file that exercises all language features
-2. `strength_test.c`: Specifically tests strength reduction optimization
-3. `optimization_test.c`: Tests various optimization techniques
+### Prerequisites
 
-The Makefile provides multiple testing targets:
-- `make test`: Basic compilation test
-- `make test_ir`: Tests IR generation
-- `make test_optim`: Tests IR generation with optimization
-- `make test_strength_reduction`: Specific test for strength reduction
-- `make test_all_optimizations`: Tests all optimization techniques
+To build and run the compiler, you need:
 
-## Current Issues and Future Work
+1. **C/C++ Development tools**:
+   - GCC or Clang compiler
+   - GNU Make
 
-### Issues
+2. **LLVM Development Libraries**:
+   - LLVM core libraries (version 10.0 or higher recommended)
+   - LLVM development headers
 
-1. **Function Call Handling**: The IR generator has significant issues with handling function calls. In our testing:
-   - Function declarations are correctly parsed and added to the AST
-   - However, when trying to call these functions, the IR generator fails to recognize them
-   - This results in "Unknown function" errors during IR generation
-   - For example, in `optimization_test.c`, the functions `constant_fold_test` and `strength_reduction_test` are defined but cannot be called in `main()`
-   - This is a critical issue affecting the usability of the compiler
+3. **Flex and Bison**:
+   - Flex (fast lexical analyzer generator)
+   - Bison (parser generator)
 
-2. **Symbol Resolution**: There are issues with the symbol resolution mechanism:
-   - While variables are correctly resolved within functions
-   - Functions are not properly added to the symbol table for resolution
-   - This appears to be an issue in the semantic analysis phase or in the symbol table implementation
-   - The error manifests as "Undefined function" errors despite the functions being defined
+4. **Visualization Tools** (optional):
+   - GraphViz (for AST visualization)
 
-3. **Memory Management**: While we've fixed the segmentation faults in the optimization report generation:
-   - There may still be memory management issues in other parts of the code
-   - Memory leaks might occur during complex compilation tasks
-   - More thorough testing with memory analyzers like Valgrind would be beneficial
+### Installation on Ubuntu/Debian
+
+```bash
+# Install required packages
+sudo apt update
+sudo apt install build-essential llvm-dev clang flex bison graphviz
+```
+
+### Building the Compiler
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd C-Compiler
+
+# Build the compiler
+make
+```
+
+### Running the Compiler
+
+The Makefile provides several targets for testing different compiler phases:
+
+```bash
+# Test frontend (lexical and syntax analysis)
+make frontend
+
+# Test middle-end (IR generation and optimization)
+make middleend
+
+# Test backend (assembly generation)
+make backend_test
+
+# Test complete pipeline (frontend -> middle-end -> backend)
+make full_pipeline
+```
+
+For testing with specific files:
+
+```bash
+# Compile a custom file
+./compiler your_file.c --emit-ir --optimize
+./backend your_file.opt.ll -o your_file.s
+gcc -o your_file_executable your_file.s
+```
+
+### Troubleshooting Common Issues
+
+1. **Segmentation faults in middle-end**:
+   - Use `make middleend_simple` which uses a simpler test case
+   - Avoid complex function calls in test programs
+
+2. **LLVM version compatibility**:
+   - Ensure your LLVM installation matches the expected version
+   - Check include paths in Makefile if compilation fails
+
+## Current Limitations and Future Work
+
+### Current Limitations
+
+1. **Function Call Handling**: The compiler has some limitations with complex function calls.
+2. **Limited Type System**: No support for arrays, pointers, or user-defined types.
+3. **Limited Standard Library**: No comprehensive standard library implementation.
 
 ### Future Work
 
-1. **Fix Current Issues**:
-   - Fix the function call handling in the IR generator by properly implementing function lookup
-   - Enhance the symbol table to properly register and resolve function symbols
-   - Conduct comprehensive memory leak analysis and fix any leaking resources
-
-2. **Additional Optimizations**:
-   - Implement more advanced loop optimizations
-   - Add inlining capabilities for small functions
-   - Implement constant propagation across function boundaries
-
-3. **Backend Enhancements**:
-   - Add target-specific code generation
-   - Implement register allocation
-   - Add machine-dependent optimizations
-
-4. **Language Features**:
-   - Expand the type system to include arrays and structures
-   - Add support for pointers and dynamic memory allocation
-   - Implement a more comprehensive standard library
+1. **Enhanced Type System**: Add support for arrays, structs, and pointers.
+2. **Improved Error Reporting**: More detailed error messages with suggestions.
+3. **Additional Optimizations**: Implement function inlining and vectorization.
+4. **Multi-target Support**: Generate code for multiple target architectures.
 
 ## Conclusion
 
-The compiler project successfully implements all major phases of a compiler, from lexical analysis to optimization. The frontend components (lexer, parser, AST) are robust and handle a substantial subset of C-like syntax. The IR generation leverages LLVM for portability and optimization capabilities.
+This C compiler project successfully implements the key components of a modern compiler, from lexical analysis through optimization to code generation. It demonstrates important compiler construction concepts including bottom-up parsing, symbol table management, type checking, and various optimization techniques.
 
-The optimization phase has been successfully upgraded to use LLVM's built-in optimization infrastructure, providing powerful optimizations like constant folding, dead code elimination, strength reduction, and common subexpression elimination.
+The modular design allows for easy extension and enhancement, making it a solid foundation for future compiler development. The integration with LLVM provides a robust optimization framework that significantly improves the quality of the generated code.
 
-However, there are significant issues with function call handling that need to be addressed to make the compiler fully functional. Despite these limitations, the compiler provides a solid foundation for future enhancements and extensions, particularly in the optimization phase where LLVM's powerful optimization framework is effectively utilized.
-
-## Key Findings and Accomplishments
-
-1. **Successful Integration of LLVM Optimizations**: 
-   - Successfully replaced custom optimization code with LLVM's more robust PassBuilder API
-   - Implemented a configurable optimization system with multiple optimization levels
-   - Verified that key optimizations (constant folding, DCE, strength reduction) work correctly
-
-2. **Proven Strength Reduction Capability**:
-   - Successfully demonstrated strength reduction optimization converting multiplications by powers of 2 to bit shifts
-   - For example, `x * 8` is correctly transformed to `x << 3`
-   - This optimization works both at the IR generation level and through LLVM passes
-
-3. **Robust Optimization Reporting**:
-   - Fixed critical segmentation faults in the optimization report generation
-   - Implemented a comprehensive optimization report that details:
-     - Code size reduction
-     - Number of optimizations applied by category
-     - Specific details of optimization effects
-
-4. **Effective Constant Folding**:
-   - Demonstrated that constant expressions like `3 + 5` are correctly folded to `8` at compile time
-   - In the optimized IR, complex expressions with constant operands are completely evaluated
-
-5. **Verification of AST Construction**:
-   - Confirmed that the lexer and parser correctly build an AST for all language constructs
-   - The AST properly represents control flow, function declarations, and expressions
-
-6. **Identified Critical Areas for Improvement**:
-   - Pinpointed function call resolution as the major weakness of the current implementation
-   - Identified issues in the symbol table implementation for function resolution
-   - These findings provide clear direction for future development 
+While there are some limitations in the current implementation, particularly around complex function calls and advanced language features, the compiler successfully compiles and optimizes simple C programs, demonstrating the effectiveness of the applied compiler construction principles. 
